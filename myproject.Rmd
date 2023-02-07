@@ -1,0 +1,211 @@
+---
+title: "my_project"
+author: "Marcin Solnicki"
+date: '2022-12-15'
+output: html_document
+---
+
+## Short Description
+
+London bike sharing project- the purpose to predict future bike shares.
+
+The project consist of two elements: -exploratory data analysis -advanced analyst
+
+Dataset downloaded from Kaggle [London bike sharing dataset \| Kaggle](https://www.kaggle.com/datasets/hmavrodiev/london-bike-sharing-dataset?datasetId=376751&language=R)
+
+```{r}
+library(lattice)
+library(dplyr)
+library(ggplot2)
+df<-read.csv("C:/Users/soma2003/Desktop/bike_share.csv", header = TRUE, sep = ",")
+head(df)
+```
+
+remove unnecessary variable:
+
+```{r}
+df <- subset(df, select = -weather_code)
+head(df)
+```
+
+Variables:
+
+-   "timestamp" - timestamp field for grouping the data "cnt" - the count of a new bike shares
+
+-   "t1" - real temperature in C
+
+-   "t2" - temperature in C "feels like" "wind_speed"-speed of wind
+
+-   "hum" - humidity in percentage "windspeed" - wind speed in km/h
+
+-   "isholiday" - boolean field - 1 holiday / 0 non holiday
+
+-   "isweekend" - boolean field - 1 if the day is weekend
+
+-   "season" - category field meteorological seasons: 0-spring ; 1-summer; 2-fall; 3-winter.
+
+#extracting year and month from date
+
+```{r}
+df$year<-format(as.Date(df$timestamp, format="%Y-%m-%d"), "%Y")
+ df$month<-format(as.Date(df$timestamp, format="%Y-%m-%d"), "%m")
+tail(df)
+```
+
+time frame 2015/01/04- 2017/01/03
+
+```{r}
+ggplot(df,aes(x=year,y=cnt))+geom_point()
+```
+
+Filtering out 2017 from dataset
+
+```{r}
+df<-df%>% filter(year!=2017)
+table(df$year)
+```
+
+## Histograms
+
+```{r}
+par(mfrow=c(2,2))
+options(repr.plot.width=12, repr.plot.height=7)
+hist(df$cnt, main="Rentals",xlab="rentals");hist
+hist(df$t1, main = "Temperature", xlab = "Temperature");
+hist(df$hum, main = "Humidity",xlab = "Humidity");
+hist(df$wind_speed, main = "Wind speed", xlab = "Wind speed");
+par(mfrow=c(1,1))
+```
+
+Average Rentals by month
+
+```{r}
+
+avg_cnt_m <- df %>% group_by(month) %>% summarise(avg_cnt = mean(cnt))
+ggplot(avg_cnt_m)+geom_col(aes(x=month,y=avg_cnt))+ylab('average bikes ')
+```
+
+Summary of whole data
+
+```{r}
+summary(df)
+```
+
+Rentals By Season:
+
+0-spring,1-summer,2-autumn,3-winter
+
+```{r}
+s = c("olivedrab3", 'yellow', 'orange', 'grey50')
+options(repr.plot.width=10, repr.plot.height=8)
+df %>% group_by(season) %>%
+  summarise(n = n(), rent = sum(cnt)) %>%
+  ggplot(aes(season, rent, fill = season)) + 
+  geom_bar(stat = "identity", show.legend = F, color = 'gray50') +
+  labs(title = "Rentals by Season", x = "", y = "Total Rentals") +
+ scale_y_continuous(labels = scales::label_comma())
+```
+
+```{r}
+barchart(~df$cnt|df$is_holiday,main="Rental by holiday or not", xlab="rents")
+
+```
+
+```{r}
+barchart(~df$cnt|df$is_weekend,main="Rental by weekend or not",xlab="rentals")
+```
+
+Density plot of real temperature grouped by season
+
+```{r}
+densityplot(~t1, xlab="temprature", data=df, groups=season, 
+plot.points=FALSE, auto.key = TRUE)
+
+```
+
+## Correlation matrix
+
+```{r}
+num_d<-select_if(df,is.numeric)
+corr<-round(cor(num_d),2)
+corr
+```
+
+Rentals to humidity(cor=-0.46)
+
+```{r}
+ggplot(df,aes(hum,cnt))+geom_point()+ylab("Rentals")+xlab("Humidity")
+```
+
+The higher humidity, the less amount of rented bikes. Correlation minus
+
+Cleaning outliers
+
+```{r}
+par(mfrow=c(2,2))
+boxplot(df$cnt,horizontal = TRUE)
+boxplot(df$hum,horizontal = TRUE)
+outlh<-boxplot.stats(df$hum)$out
+outlc<-boxplot.stats(df$cnt)$out
+#outl
+df<-df%>%filter(!between(hum,min(outlh),max(outlh)))
+df<-df%>%filter(!between(cnt,min(outlc),max(outlc)))
+##without outliers
+boxplot(df$cnt,horizontal = TRUE)
+boxplot(df$hum,horizontal = TRUE)
+```
+
+## linear regression
+
+Model summary
+
+```{r}
+lm1<-lm(formula = cnt~hum,data=df)
+summary(lm1)
+```
+
+Model diagnostic
+
+```{r}
+options(repr.plot.width = 14,repr.plot.height = 10)
+par(mfrow= c(2,2))
+plot(lm1)
+
+```
+
+Theoretical (model) vs real values
+
+```{r}
+par(mfrow=c(1,1))
+plot(df$cnt~df$hum, xlab="hum", ylab="cnt")
+abline(lm1, col='red')
+legend("topleft", legend=c("real","model"), col=c("black","red"), pch=c(1,NA), lty=c(NA,2), bty="n")
+```
+
+Residuals analysis
+
+```{r}
+
+reszty = residuals(lm1)
+hist(reszty, prob=TRUE)
+lines(density(reszty), col="red", lwd=2)
+
+```
+
+#Insights, Conslusion
+
+-   No missig data or null values
+
+-   July and September are the months with highest average bikes rented
+
+-   Summer is the most popular season
+
+-   Most rented bikes in one-hour 7860
+
+-   The windspeed and season has a very low co-relation with the cnt which means, the windspeed and seasons doesn't have an effect in the demand of bikes rented.
+
+-   Humidity is the most corelated factor with rentals. The higher humidity, the less amount of rented bikes. Correlation minus
+
+-   People rent more bikes during working day than non working day.
+
+-   People don't prefer to ride bikes during holidays.
